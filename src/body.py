@@ -10,6 +10,7 @@ import torch
 from torchvision import transforms
 import json
 import torchvision
+import keras
 
 model = torchvision.models.detection.__dict__['keypointrcnn_resnet50_fpn'](num_classes=2, pretrained=True)
 model = torchvision.models.detection.maskrcnn_resnet50_fpn
@@ -215,6 +216,39 @@ class Body(object):
 
 if __name__ == "__main__":
     body_estimation = Body('model/body_pose_model.pth')
+
+    # for name, layer in body_estimation.model.named_children():
+    #     print(f"{name}: {layer}")
+    #     for name1, layer in layer.named_children():
+    #         print(f"  {name1}: {layer}")
+
+    # for param in body_estimation.model.named_parameters():
+    #     print(f"{param[0]}: {param[1].shape}")
+
+    keras_weights = 'model/model.h5'
+    model = keras.models.load_model(keras_weights)
+
+    # print(model.summary())
+
+    # load the weights of model into body_estimation
+    for i, layer in enumerate(model.layers):
+        if i < 2:
+            print(layer.name)
+            continue
+        weights = layer.get_weights()
+        print(f"Layer {i-2} ({layer.name}): {weights[0].shape}, {weights[1].shape}")
+        for d_name, d_layer in body_estimation.model.named_children():
+            if 'model' in d_name:
+                for d_name_, d_layer_ in layer.named_children():
+                    if layer.name in d_name_:
+                        print(f"Setting weights for {d_name_}")
+                        d_layer_.weight.data = torch.tensor(weights[0].transpose(3, 2, 0, 1))
+                        d_layer_.bias.data = torch.tensor(weights[1])
+            else:
+                if layer.name in d_name:
+                    print(f"Setting weights for {d_name}")
+                    d_layer.weight.data = torch.tensor(weights[0].transpose(3, 2, 0, 1))
+                    d_layer.bias.data = torch.tensor(weights[1])
 
     test_image = 'ID01_fullterm_hypotermi_HINE21_MR djup asfyxi_13w F- (Nemo)_anon.mp4'
     cap = cv2.VideoCapture(test_image)
